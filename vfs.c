@@ -420,15 +420,27 @@ void vfs_mkdir(char *nome_dir) {
 // cd dir - move o directório actual para dir.
 void vfs_cd(char *nome_dir) {
   dir_entry *dir = (dir_entry *) BLOCK(current_dir);
-  int n_entries = dir[0].size;
+  int n_entries = dir[0].size, i;
 
-  int i;
+  int cur_block = current_dir;
   for (i = 0; i < n_entries; i++)
-    if (dir[i].type == TYPE_DIR && strcmp(dir[i].name, nome_dir) == 0)
+  {
+    if (i % DIR_ENTRIES_PER_BLOCK == 0 && i)
     {
-      current_dir = dir[i].first_block;
+      if (DEBUG)
+        printf("Changed Block\n");
+      cur_block = fat[cur_block];
+      dir = (dir_entry *) BLOCK(cur_block);
+    }
+
+    int block_i = i % DIR_ENTRIES_PER_BLOCK;
+        
+    if (dir[block_i].type == TYPE_DIR && strcmp(dir[block_i].name, nome_dir) == 0)
+    {
+      current_dir = dir[block_i].first_block;
       return;
     }
+  }
 
   printf("ERROR(input: directory not found)\n");
 
