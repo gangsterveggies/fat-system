@@ -451,7 +451,7 @@ void vfs_cd(char *nome_dir) {
     }
   }
 
-  printf("ERROR(input: directory not found)\n");
+  printf("ERROR(cd: directory not found)\n");
 
   return;
 }
@@ -558,7 +558,7 @@ void vfs_rmdir(char *nome_dir) {
     }
   }
 
-  printf("ERROR(input: directory not found)\n");
+  printf("ERROR(rmdir: directory not found)\n");
 
   return;
 }
@@ -566,6 +566,64 @@ void vfs_rmdir(char *nome_dir) {
 
 // get fich1 fich2 - copia um ficheiro normal UNIX fich1 para um ficheiro no nosso sistema fich2
 void vfs_get(char *nome_orig, char *nome_dest) {
+  dir_entry *dir = (dir_entry *) BLOCK(current_dir);
+  int n_entries = dir[0].size;
+
+  struct stat statbuf;
+  if (stat(nome_orig, &statbuf) == -1)
+  {
+    printf("ERROR(get: input file not found)\n");
+    return;
+  }
+  
+  int req_size = (int)statbuf.st_size;
+  int req_blocks = (n_entries % DIR_ENTRIES_PER_BLOCK == 0) + (req_size + sb->block_size - 1) / sb->block_size;
+
+  if (sb->n_free_blocks < req_blocks)
+  {
+    printf("ERROR(mkdir: memory full)\n");
+    return;
+  }
+
+  req_blocks -= (n_entries % DIR_ENTRIES_PER_BLOCK == 0);
+
+  if (DEBUG)
+    printf("Blocks: used %d from %lu\n", n_entries + 1, DIR_ENTRIES_PER_BLOCK);
+
+  dir[0].size++;
+
+  int first_block = get_free_block();
+  int new_block, next_block = first_block;
+  int finput = open(nome_orig, O_RDONLY), count_block = 1, n;
+  char msg[4200];
+  while ((n = read(finput, msg, sb->block_size)) > 0)
+  {
+    if (count_block != req_blocks)
+    {
+      count_block++;
+      new_block = get_free_block();
+      fat[next_block] = new_block;
+    }
+
+    strcpy(BLOCK(next_block), msg);
+
+    next_block = new_block;
+  }
+
+  int cur_block = current_dir;
+  while (fat[cur_block] != -1)
+    cur_block = fat[cur_block];
+
+  if (n_entries % DIR_ENTRIES_PER_BLOCK == 0)
+  {
+    int next_block = get_free_block();
+    fat[cur_block] = next_block;
+    cur_block = next_block;
+  }
+
+  dir = (dir_entry *) BLOCK(cur_block);
+  init_dir_entry(&dir[n_entries % DIR_ENTRIES_PER_BLOCK], TYPE_FILE, nome_dest, req_size, first_block);
+  
   return;
 }
 
@@ -578,6 +636,39 @@ void vfs_put(char *nome_orig, char *nome_dest) {
 
 // cat fich - escreve para o ecrã o conteúdo do ficheiro fich
 void vfs_cat(char *nome_fich) {
+    dir_entry *dir = (dir_entry *) BLOCK(current_dir);
+  int n_entries = dir[0].size, i;
+
+  int cur_block = current_dir;
+  for (i = 0; i < n_entries; i++)
+  {
+    if (i % DIR_ENTRIES_PER_BLOCK == 0 && i)
+    {
+      if (DEBUG)
+        printf("Changed Block\n");
+      cur_block = fat[cur_block];
+      dir = (dir_entry *) BLOCK(cur_block);
+    }
+
+    int block_i = i % DIR_ENTRIES_PER_BLOCK;
+        
+    if (dir[block_i].type == TYPE_FILE && strcmp(dir[block_i].name, nome_fich) == 0)
+    {
+      int next_block = dir[block_i].first_block;
+      write(1, BLOCK(next_block), sb->block_size);
+
+      while (fat[next_block] != -1)
+      {
+        next_block = fat[next_block];
+        write(1, BLOCK(next_block), sb->block_size);
+      }
+
+      return;
+    }
+  }
+
+  printf("ERROR(cat: file not found)\n");
+
   return;
 }
 
