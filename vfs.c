@@ -274,6 +274,13 @@ void init_dir_entry(dir_entry *dir, char type, char *name, int size, int first_b
   return;
 }
 
+int cstr_cmp(const void *a, const void *b) 
+{ 
+  const char **ia = (const char **)a;
+  const char **ib = (const char **)b;
+  return strcmp(*ia, *ib);
+} 
+
 int get_free_block() {
   if (sb->n_free_blocks == 0)
     return -1;
@@ -333,26 +340,39 @@ void exec_com(COMMAND com) {
 // ls - lista o conteúdo do directório actual
 void vfs_ls(void) {
   dir_entry *dir = (dir_entry *) BLOCK(current_dir);
-  int n_entries = dir[0].size;
+  int n_entries = dir[0].size, i;
 
-  int i, cur_block = current_dir;
+  char type_str[100];
+  char **content = (char **) malloc(n_entries * sizeof(char *));
+  for (i = 0; i < n_entries; i++)
+    content[i] = (char * ) malloc(1024 * sizeof(char *));
+  
+
+  int cur_block = current_dir;
   for (i = 0; i < n_entries; i++)
   {
     if (i % DIR_ENTRIES_PER_BLOCK == 0 && i)
     {
       if (DEBUG)
-        printf("Changing Block\n");
+        printf("Changed Block\n");
       cur_block = fat[cur_block];
       dir = (dir_entry *) BLOCK(cur_block);
     }
 
     int block_i = i % DIR_ENTRIES_PER_BLOCK;
-    printf("%s\t%02d-%02d-%04d\t", dir[block_i].name, dir[block_i].day, dir[block_i].month, 1900 + dir[block_i].year);
+
     if (dir[block_i].type == TYPE_DIR)
-      printf("DIR\n");
+      sprintf(type_str, "DIR");
     else
-      printf("%d\n", dir[block_i].size);
+      sprintf(type_str, "%d", dir[block_i].size);
+    
+    sprintf(content[i], "%s\t%02d-%02d-%04d\t%s", dir[block_i].name, dir[block_i].day, dir[block_i].month, 1900 + dir[block_i].year, type_str);
   }
+
+  qsort(content, n_entries, sizeof(char *), cstr_cmp);
+
+  for (i = 0; i < n_entries; i++)
+    printf("%s\n", content[i]);
 
   return;
 }
