@@ -294,6 +294,15 @@ int get_free_block() {
   return livre;
 }
 
+void delete_block(int block) {
+  fat[block] = sb->free_block;
+  sb->free_block = block;
+
+  sb->n_free_blocks++;
+
+  return;
+}
+
 void exec_com(COMMAND com) {
   // para cada comando invocar a função que o implementa
   if (!strcmp(com.cmd, "exit"))
@@ -500,13 +509,24 @@ void vfs_pwd(void) {
 // rmdir dir - remove o subdirectório dir (se vazio) do directório actual
 void vfs_rmdir(char *nome_dir) {
   dir_entry *dir = (dir_entry *) BLOCK(current_dir);
-  int n_entries = dir[0].size;
+  int n_entries = dir[0].size, i;
 
-  int i;
+  int cur_block = current_dir;
   for (i = 0; i < n_entries; i++)
-    if (dir[i].type == TYPE_DIR && strcmp(dir[i].name, nome_dir) == 0)
+  {
+    if (i % DIR_ENTRIES_PER_BLOCK == 0 && i)
     {
-      dir_entry *del_dir = (dir_entry *) BLOCK(dir[i].first_block);
+      if (DEBUG)
+        printf("Changed Block\n");
+      cur_block = fat[cur_block];
+      dir = (dir_entry *) BLOCK(cur_block);
+    }
+
+    int block_i = i % DIR_ENTRIES_PER_BLOCK;
+
+    if (dir[block_i].type == TYPE_DIR && strcmp(dir[block_i].name, nome_dir) == 0)
+    { 
+      dir_entry *del_dir = (dir_entry *) BLOCK(dir[block_i].first_block);
 
       if (del_dir[0].size != 2)
       {
@@ -514,17 +534,29 @@ void vfs_rmdir(char *nome_dir) {
 	return;
       }
 
-      dir[i].type = dir[n_entries - 1].type;
-      strcpy(dir[i].name, dir[n_entries - 1].name);
-      dir[i].day = dir[n_entries - 1].day;
-      dir[i].month = dir[n_entries - 1].month;
-      dir[i].year = dir[n_entries - 1].year;
-      dir[i].size = dir[n_entries - 1].size;
-      dir[i].first_block = dir[n_entries - 1].first_block;
+      int last_block = cur_block;
+      while (fat[last_block] != -1)
+        last_block = fat[last_block];
+      dir_entry *last_dir_block = (dir_entry *) BLOCK(last_block);
+      dir_entry last_dir = last_dir_block[n_entries % DIR_ENTRIES_PER_BLOCK];
+
+      if (n_entries % DIR_ENTRIES_PER_BLOCK == 0)
+        delete_block(last_block);
+
+      dir[block_i].type = last_dir.type;
+      strcpy(dir[block_i].name, last_dir.name);
+      dir[block_i].day = last_dir.day;
+      dir[block_i].month = last_dir.month;
+      dir[block_i].year = last_dir.year;
+      dir[block_i].size = last_dir.size;
+      dir[block_i].first_block = last_dir.first_block;
+
+      dir = (dir_entry *) BLOCK(current_dir);
       dir[0].size--;
 
       return;
     }
+  }
 
   printf("ERROR(input: directory not found)\n");
 
