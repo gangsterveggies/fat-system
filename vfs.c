@@ -404,9 +404,9 @@ void vfs_mkdir(char *nome_dir) {
 
   if (n_entries % DIR_ENTRIES_PER_BLOCK == 0)
   {
-    new_block = get_free_block();
-    fat[cur_block] = new_block;
-    cur_block = new_block;
+    int next_block = get_free_block();
+    fat[cur_block] = next_block;
+    cur_block = next_block;
   }
 
   dir = (dir_entry *) BLOCK(cur_block);
@@ -462,11 +462,23 @@ void vfs_pwd(void) {
     int prev_dir = dir[1].first_block;
     dir = (dir_entry *) BLOCK(prev_dir);
     int n_entries = dir[0].size;
-    
+
+    int cur_block = prev_dir;
     for (i = 0; i < n_entries; i++)
-      if (dir[i].first_block == it_dir)
+    {
+      if (i % DIR_ENTRIES_PER_BLOCK == 0 && i)
       {
-	strcpy(tmp, dir[i].name);
+        if (DEBUG)
+          printf("Changed Block\n");
+        cur_block = fat[cur_block];
+        dir = (dir_entry *) BLOCK(cur_block);
+      }
+
+      int block_i = i % DIR_ENTRIES_PER_BLOCK;
+
+      if (dir[block_i].first_block == it_dir)
+      {
+	strcpy(tmp, dir[block_i].name);
 	strcat(tmp, name);
 	strcpy(name, tmp);
 	strcpy(tmp, "/");
@@ -474,6 +486,7 @@ void vfs_pwd(void) {
 	strcpy(name, tmp);
 	break;
       }
+    }
 
     it_dir = prev_dir;
   }
