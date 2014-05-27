@@ -18,6 +18,8 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
+#define DEBUG 1
+
 #define MAXARGS 100
 #define CHECK_NUMBER 9999
 #define TYPE_DIR 'D'
@@ -336,19 +338,20 @@ void vfs_ls(void) {
   int i, cur_block = current_dir;
   for (i = 0; i < n_entries; i++)
   {
+    if (i % DIR_ENTRIES_PER_BLOCK == 0 && i)
+    {
+      if (DEBUG)
+        printf("Changing Block\n");
+      cur_block = fat[cur_block];
+      dir = (dir_entry *) BLOCK(cur_block);
+    }
+
     int block_i = i % DIR_ENTRIES_PER_BLOCK;
     printf("%s\t%02d-%02d-%04d\t", dir[block_i].name, dir[block_i].day, dir[block_i].month, 1900 + dir[block_i].year);
     if (dir[block_i].type == TYPE_DIR)
       printf("DIR\n");
     else
       printf("%d\n", dir[block_i].size);
-
-    if (i % DIR_ENTRIES_PER_BLOCK == 0 && i)
-    {
-      printf("Changing Block\n");
-      cur_block = fat[cur_block];
-      dir = (dir_entry *) BLOCK(current_dir);
-    }
   }
 
   return;
@@ -358,13 +361,19 @@ void vfs_ls(void) {
 // mkdir dir - cria um subdirectório com nome dir no directório actual
 void vfs_mkdir(char *nome_dir) {
   dir_entry *dir = (dir_entry *) BLOCK(current_dir);
-  int req_blocks = (dir[0].size % DIR_ENTRIES_PER_BLOCK == 0) + 1;
+  int n_entries = dir[0].size;
+  int req_blocks = (n_entries % DIR_ENTRIES_PER_BLOCK == 0) + 1;
 
-  if (sb->n_free_blocks < req_block)
+  if (sb->n_free_blocks < req_blocks)
   {
     printf("ERROR(mkdir: memory full)\n");
     return;
   }
+
+  if (DEBUG)
+    printf("Blocks: used %d from %lu\n", n_entries + 1, DIR_ENTRIES_PER_BLOCK);
+
+  dir[0].size++;
 
   int new_block = get_free_block();
   init_dir_block(new_block, current_dir);
@@ -373,10 +382,16 @@ void vfs_mkdir(char *nome_dir) {
   while (fat[cur_block] != -1)
     cur_block = fat[cur_block];
 
+  if (n_entries % DIR_ENTRIES_PER_BLOCK == 0)
+  {
+    new_block = get_free_block();
+    fat[cur_block] = new_block;
+    cur_block = new_block;
+  }
+
   dir = (dir_entry *) BLOCK(cur_block);
   
-  init_dir_entry(&dir[dir[0].size], TYPE_DIR, nome_dir, 0, new_block);
-  dir[0].size++;
+  init_dir_entry(&dir[n_entries % DIR_ENTRIES_PER_BLOCK], TYPE_DIR, nome_dir, 0, new_block);
 
   return;
 }

@@ -11,7 +11,10 @@ OBJ = ${SRC:.c=.o}
 all: ${EXEC_NAME}
 
 ${EXEC_NAME}: ${OBJ}
-	${CC} ${SRC} ${CFLAGS} -o ${EXEC_NAME}
+	${CC} ${OBJ} ${CFLAGS} -o ${EXEC_NAME}
+
+%.o: %.c
+	${CC} ${CFLAGS} -c -o $@ $+
 
 clean:
 	rm ${EXEC_NAME} *~ *# -rf
