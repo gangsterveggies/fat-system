@@ -659,6 +659,8 @@ void vfs_cat(char *nome_fich) {
 
       while (fat[next_block] != -1)
       {
+        if (DEBUG)
+          printf("\nNext Block\n");
         next_block = fat[next_block];
         write(1, BLOCK(next_block), sb->block_size);
       }
