@@ -1,7 +1,7 @@
 EXEC_NAME=vfs
 CC=gcc
 
-CFLAGS= -Wall -lreadline -lcurses
+CFLAGS= -Wall -lreadline -lcurses -g
 
 SRC = vfs.c
 OBJ = ${SRC:.c=.o}

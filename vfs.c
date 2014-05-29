@@ -581,7 +581,7 @@ void vfs_get(char *nome_orig, char *nome_dest) {
 
   if (sb->n_free_blocks < req_blocks)
   {
-    printf("ERROR(mkdir: memory full)\n");
+    printf("ERROR(get: memory full)\n");
     return;
   }
 
@@ -713,8 +713,9 @@ void vfs_cat(char *nome_fich) {
 // cp fich dir - copia o ficheiro fich para o subdirectório dir
 void vfs_cp(char *nome_orig, char *nome_dest) {
   dir_entry *dir = (dir_entry *) BLOCK(current_dir);
-  int n_entries = dir[0].size, i;
+  int n_entries = dir[0].size, i, inp_block = -1, exp_dir = current_dir;
 
+  int block_i;
   int cur_block = current_dir;
   for (i = 0; i < n_entries; i++)
   {
@@ -726,23 +727,99 @@ void vfs_cp(char *nome_orig, char *nome_dest) {
       dir = (dir_entry *) BLOCK(cur_block);
     }
 
-    int block_i = i % DIR_ENTRIES_PER_BLOCK;
+    block_i = i % DIR_ENTRIES_PER_BLOCK;
+        
+    if (strcmp(dir[block_i].name, nome_orig) == 0)
+    {
+      inp_block = dir[block_i].first_block;
+      break;
+    }
+  }
+
+  if (inp_block == -1)
+  {
+    printf("ERROR(cp: input file not found)\n");
+    return;
+  }
+
+  int req_size = dir[block_i].size;
+
+  dir = (dir_entry *) BLOCK(current_dir);
+  cur_block = current_dir;
+  for (i = 0; i < n_entries; i++)
+  {
+    if (i % DIR_ENTRIES_PER_BLOCK == 0 && i)
+    {
+      if (DEBUG)
+        printf("Changed Block\n");
+      cur_block = fat[cur_block];
+      dir = (dir_entry *) BLOCK(cur_block);
+    }
+
+    block_i = i % DIR_ENTRIES_PER_BLOCK;
         
     if (strcmp(dir[block_i].name, nome_dest) == 0)
     {
       if (dir[block_i].type == TYPE_DIR)
       {
-        
+        exp_dir = dir[block_i].first_block;
+        strcpy(nome_dest, nome_orig);
       }
       else
-      {
         vfs_rm(nome_dest);
-        break;
-      }
 
-      return;
+      break;
     }
   }
+
+  dir_entry *cur_dir = (dir_entry *) BLOCK(exp_dir);
+  n_entries = cur_dir[0].size;
+  int req_blocks = (n_entries % DIR_ENTRIES_PER_BLOCK == 0) + (req_size + sb->block_size - 1) / sb->block_size;
+
+  if (sb->n_free_blocks < req_blocks)
+  {
+    printf("ERROR(cp: memory full)\n");
+    return;
+  }
+
+  req_blocks -= (n_entries % DIR_ENTRIES_PER_BLOCK == 0);
+
+  cur_dir[0].size++;
+
+  int first_block = get_free_block();
+  int new_block, next_block = first_block;
+  int count_block = 1, cur = inp_block;
+
+  strcpy(BLOCK(next_block), BLOCK(cur));
+  while (fat[cur] != -1)
+  {
+    if (count_block != req_blocks)
+    {
+      count_block++;
+      new_block = get_free_block();
+      fat[next_block] = new_block;
+    }
+
+    cur = fat[cur];
+    strcpy(BLOCK(next_block), BLOCK(cur));
+
+    next_block = new_block;
+  }
+
+  cur_block = exp_dir;
+  while (fat[cur_block] != -1)
+    cur_block = fat[cur_block];
+
+  if (n_entries % DIR_ENTRIES_PER_BLOCK == 0)
+  {
+    int next_block = get_free_block();
+    fat[cur_block] = next_block;
+    cur_block = next_block;
+  }
+
+  dir = (dir_entry *) BLOCK(cur_block);
+  init_dir_entry(&dir[n_entries % DIR_ENTRIES_PER_BLOCK], TYPE_FILE, nome_dest, req_size, first_block);
+
   
   return;
 }
