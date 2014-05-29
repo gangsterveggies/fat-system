@@ -630,13 +630,47 @@ void vfs_get(char *nome_orig, char *nome_dest) {
 
 // put fich1 fich2 - copia um ficheiro do nosso sistema fich1 para um ficheiro normal UNIX fich2
 void vfs_put(char *nome_orig, char *nome_dest) {
+  dir_entry *dir = (dir_entry *) BLOCK(current_dir);
+  int n_entries = dir[0].size, i;
+
+  int cur_block = current_dir;
+  for (i = 0; i < n_entries; i++)
+  {
+    if (i % DIR_ENTRIES_PER_BLOCK == 0 && i)
+    {
+      if (DEBUG)
+        printf("Changed Block\n");
+      cur_block = fat[cur_block];
+      dir = (dir_entry *) BLOCK(cur_block);
+    }
+
+    int block_i = i % DIR_ENTRIES_PER_BLOCK;
+        
+    if (dir[block_i].type == TYPE_FILE && strcmp(dir[block_i].name, nome_orig) == 0)
+    {
+      int foutput = open(nome_dest, O_CREAT|O_TRUNC|O_WRONLY, 0644);
+      int cur = dir[block_i].first_block;
+
+      write(foutput, BLOCK(cur), sb->block_size);
+      while (fat[cur] != -1)
+      {
+        cur = fat[cur];
+        write(foutput, BLOCK(cur), sb->block_size);
+      }
+
+      return;
+    }
+  }
+
+  printf("ERROR(put: file not found)\n");
+
   return;
 }
 
 
 // cat fich - escreve para o ecrã o conteúdo do ficheiro fich
 void vfs_cat(char *nome_fich) {
-    dir_entry *dir = (dir_entry *) BLOCK(current_dir);
+  dir_entry *dir = (dir_entry *) BLOCK(current_dir);
   int n_entries = dir[0].size, i;
 
   int cur_block = current_dir;
@@ -678,6 +712,38 @@ void vfs_cat(char *nome_fich) {
 // cp fich1 fich2 - copia o ficheiro fich1 para fich2
 // cp fich dir - copia o ficheiro fich para o subdirectório dir
 void vfs_cp(char *nome_orig, char *nome_dest) {
+  dir_entry *dir = (dir_entry *) BLOCK(current_dir);
+  int n_entries = dir[0].size, i;
+
+  int cur_block = current_dir;
+  for (i = 0; i < n_entries; i++)
+  {
+    if (i % DIR_ENTRIES_PER_BLOCK == 0 && i)
+    {
+      if (DEBUG)
+        printf("Changed Block\n");
+      cur_block = fat[cur_block];
+      dir = (dir_entry *) BLOCK(cur_block);
+    }
+
+    int block_i = i % DIR_ENTRIES_PER_BLOCK;
+        
+    if (strcmp(dir[block_i].name, nome_dest) == 0)
+    {
+      if (dir[block_i].type == TYPE_DIR)
+      {
+        
+      }
+      else
+      {
+        vfs_rm(nome_dest);
+        break;
+      }
+
+      return;
+    }
+  }
+  
   return;
 }
 
@@ -685,6 +751,9 @@ void vfs_cp(char *nome_orig, char *nome_dest) {
 // mv fich1 fich2 - move o ficheiro fich1 para fich2
 // mv fich dir - move o ficheiro fich para o subdirectório dir
 void vfs_mv(char *nome_orig, char *nome_dest) {
+  vfs_cp(nome_orig, nome_dest);
+  vfs_rm(nome_orig);
+  
   return;
 }
 
