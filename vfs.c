@@ -530,7 +530,7 @@ void vfs_rmdir(char *nome_dir) {
 
       if (del_dir[0].size != 2)
       {
-	printf("ERROR(input: directory not empty)\n");
+	printf("ERROR(rmdir: directory not empty)\n");
 	return;
       }
 
