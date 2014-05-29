@@ -18,7 +18,7 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
-#define DEBUG 1
+#define DEBUG 0
 
 #define MAXARGS 100
 #define CHECK_NUMBER 9999
@@ -697,7 +697,12 @@ void vfs_cat(char *nome_fich) {
         if (DEBUG)
           printf("\nNext Block\n");
         next_block = fat[next_block];
-        write(1, BLOCK(next_block), sb->block_size);
+
+	int write_size = sb->block_size;
+	if (fat[next_block] == -1)
+	  write_size = dir[block_i].size % sb->block_size;
+	
+        write(1, BLOCK(next_block), write_size);
       }
 
       return;
