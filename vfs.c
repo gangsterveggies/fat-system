@@ -538,10 +538,11 @@ void vfs_rmdir(char *nome_dir) {
       while (fat[last_block] != -1)
         last_block = fat[last_block];
       dir_entry *last_dir_block = (dir_entry *) BLOCK(last_block);
-      dir_entry last_dir = last_dir_block[n_entries % DIR_ENTRIES_PER_BLOCK];
+      dir_entry last_dir = last_dir_block[(n_entries - 1 + DIR_ENTRIES_PER_BLOCK) % DIR_ENTRIES_PER_BLOCK];
 
-      if (n_entries % DIR_ENTRIES_PER_BLOCK == 0)
+      if ((n_entries - 1 + DIR_ENTRIES_PER_BLOCK) % DIR_ENTRIES_PER_BLOCK == 0)
         delete_block(last_block);
+      delete_block(dir[block_i].first_block);
 
       dir[block_i].type = last_dir.type;
       strcpy(dir[block_i].name, last_dir.name);
@@ -837,5 +838,61 @@ void vfs_mv(char *nome_orig, char *nome_dest) {
 
 // rm fich - remove o ficheiro fich
 void vfs_rm(char *nome_fich) {
+  dir_entry *dir = (dir_entry *) BLOCK(current_dir);
+  int n_entries = dir[0].size, i;
+
+  int cur_block = current_dir;
+  for (i = 0; i < n_entries; i++)
+  {
+    if (i % DIR_ENTRIES_PER_BLOCK == 0 && i)
+    {
+      if (DEBUG)
+        printf("Changed Block\n");
+      cur_block = fat[cur_block];
+      dir = (dir_entry *) BLOCK(cur_block);
+    }
+
+    int block_i = i % DIR_ENTRIES_PER_BLOCK;
+        
+    if (dir[block_i].type == TYPE_FILE && strcmp(dir[block_i].name, nome_fich) == 0)
+    {
+      int next_block = dir[block_i].first_block, count = 1;
+
+      while (fat[next_block] != -1)
+      {
+        next_block = fat[next_block];
+        count++;
+      }
+
+      sb->n_free_blocks += count;
+      fat[next_block] = sb->free_block;
+      sb->free_block = dir[block_i].first_block;
+
+      int last_block = cur_block;
+      while (fat[last_block] != -1)
+        last_block = fat[last_block];
+      dir_entry *last_dir_block = (dir_entry *) BLOCK(last_block);
+      dir_entry last_dir = last_dir_block[(n_entries - 1 + DIR_ENTRIES_PER_BLOCK) % DIR_ENTRIES_PER_BLOCK];
+
+      if ((n_entries - 1 + DIR_ENTRIES_PER_BLOCK) % DIR_ENTRIES_PER_BLOCK == 0)
+        delete_block(last_block);
+
+      dir[block_i].type = last_dir.type;
+      strcpy(dir[block_i].name, last_dir.name);
+      dir[block_i].day = last_dir.day;
+      dir[block_i].month = last_dir.month;
+      dir[block_i].year = last_dir.year;
+      dir[block_i].size = last_dir.size;
+      dir[block_i].first_block = last_dir.first_block;
+
+      dir = (dir_entry *) BLOCK(current_dir);
+      dir[0].size--;
+
+      return;
+    }
+  }
+
+  printf("ERROR(rm: file not found)\n");
+  
   return;
 }
