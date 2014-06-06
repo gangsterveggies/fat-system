@@ -834,9 +834,104 @@ void vfs_cp(char *nome_orig, char *nome_dest) {
 // mv fich1 fich2 - move o ficheiro fich1 para fich2
 // mv fich dir - move o ficheiro fich para o subdirectório dir
 void vfs_mv(char *nome_orig, char *nome_dest) {
-  vfs_cp(nome_orig, nome_dest);
-  vfs_rm(nome_orig);
-  
+  dir_entry *dir = (dir_entry *) BLOCK(current_dir);
+  int n_entries = dir[0].size, i, inp_block = -1, exp_dir = current_dir, req_size = -1;
+
+  int block_i;
+  int cur_block = current_dir;
+  for (i = 0; i < n_entries; i++)
+  {
+    if (i % DIR_ENTRIES_PER_BLOCK == 0 && i)
+    {
+      if (DEBUG)
+        printf("Changed Block\n");
+      cur_block = fat[cur_block];
+      dir = (dir_entry *) BLOCK(cur_block);
+    }
+
+    block_i = i % DIR_ENTRIES_PER_BLOCK;
+        
+    if (strcmp(dir[block_i].name, nome_orig) == 0)
+    {
+      int last_block = cur_block;
+      while (fat[last_block] != -1)
+        last_block = fat[last_block];
+      dir_entry *last_dir_block = (dir_entry *) BLOCK(last_block);
+      dir_entry last_dir = last_dir_block[(n_entries - 1 + DIR_ENTRIES_PER_BLOCK) % DIR_ENTRIES_PER_BLOCK];
+
+      if ((n_entries - 1 + DIR_ENTRIES_PER_BLOCK) % DIR_ENTRIES_PER_BLOCK == 0)
+        delete_block(last_block);
+
+      req_size = dir[block_i].size;
+
+      dir[block_i].type = last_dir.type;
+      strcpy(dir[block_i].name, last_dir.name);
+      dir[block_i].day = last_dir.day;
+      dir[block_i].month = last_dir.month;
+      dir[block_i].year = last_dir.year;
+      dir[block_i].size = last_dir.size;
+      dir[block_i].first_block = last_dir.first_block;
+
+      dir = (dir_entry *) BLOCK(current_dir);
+      dir[0].size--;
+      
+      inp_block = dir[block_i].first_block;
+      break;
+    }
+  }
+
+  if (inp_block == -1)
+  {
+    printf("ERROR(mv: input file not found)\n");
+    return;
+  }
+
+  dir = (dir_entry *) BLOCK(current_dir);
+  cur_block = current_dir;
+  for (i = 0; i < n_entries; i++)
+  {
+    if (i % DIR_ENTRIES_PER_BLOCK == 0 && i)
+    {
+      if (DEBUG)
+        printf("Changed Block\n");
+      cur_block = fat[cur_block];
+      dir = (dir_entry *) BLOCK(cur_block);
+    }
+
+    block_i = i % DIR_ENTRIES_PER_BLOCK;
+        
+    if (strcmp(dir[block_i].name, nome_dest) == 0)
+    {
+      if (dir[block_i].type == TYPE_DIR)
+      {
+        exp_dir = dir[block_i].first_block;
+        strcpy(nome_dest, nome_orig);
+      }
+      else
+        vfs_rm(nome_dest);
+
+      break;
+    }
+  }
+
+  dir_entry *cur_dir = (dir_entry *) BLOCK(exp_dir);
+  n_entries = cur_dir[0].size;
+  cur_dir[0].size++;
+
+  cur_block = exp_dir;
+  while (fat[cur_block] != -1)
+    cur_block = fat[cur_block];
+
+  if (n_entries % DIR_ENTRIES_PER_BLOCK == 0)
+  {
+    int next_block = get_free_block();
+    fat[cur_block] = next_block;
+    cur_block = next_block;
+  }
+
+  dir = (dir_entry *) BLOCK(cur_block);
+  init_dir_entry(&dir[n_entries % DIR_ENTRIES_PER_BLOCK], TYPE_FILE, nome_dest, req_size, inp_block);
+    
   return;
 }
 
