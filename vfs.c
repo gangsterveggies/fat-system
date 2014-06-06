@@ -5,6 +5,8 @@
 // compilação: gcc vfs.c -Wall -lreadline -lcurses -o vfs      //
 // utilização: vfs [-b[256|512|1024]] [-f[8|10|12]] FILESYSTEM //
 //                                                             //
+//                    Pedro Paredes                            //
+//                                                             //
 /////////////////////////////////////////////////////////////////
 
 #include <stdio.h>
